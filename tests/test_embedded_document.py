@@ -27,6 +27,9 @@ class TestEmbeddedDocument(BaseTest):
         })
 
         assert document is not None
+        assert isinstance(document, MyDoc)
+        assert isinstance(document.embedded, MyParentEmbeddedDocument)
+        assert isinstance(document.embedded.embedded, MyChildEmbeddedDocument)
 
 
     def test_embedded_document(self):
@@ -204,9 +207,9 @@ class TestEmbeddedDocument(BaseTest):
         assert grandchild.to_mongo() == {'d': 4, '_cls': 'GrandChild'}
 
         with pytest.raises(ValidationError):
-            ret = MyDoc(parent=OtherEmbedded())
+            MyDoc(parent=OtherEmbedded())
         with pytest.raises(ValidationError):
-            ret = MyDoc(child=parent)
+            MyDoc(child=parent)
         doc = MyDoc(parent=child, child=child)
         assert doc.child == doc.parent
 
@@ -281,9 +284,24 @@ class TestEmbeddedDocument(BaseTest):
         cgc = ConcreteGrandChild(a=1, b=2, c=3, d=4)
         ccgc = ConcreteConcreteGrandChild(a=1, b=2, c=3, d=4)
 
-        assert cc.to_mongo() == {'in_mongo_a_parent': 1, 'b': 2, 'c': 3, '_cls': 'ConcreteChild'}
-        assert cgc.to_mongo() == {'in_mongo_a_child': 1, 'b': 2, 'c': 3, 'd': 4, '_cls': 'ConcreteGrandChild'}
+        # Child of abstract doesn't need `cls` hint field in serialization
+        assert cc.to_mongo() == {'in_mongo_a_parent': 1, 'b': 2, 'c': 3}
+        assert cgc.to_mongo() == {'in_mongo_a_child': 1, 'b': 2, 'c': 3, 'd': 4}
+        # But child of non abstract does !
         assert ccgc.to_mongo() == {'in_mongo_a_parent': 1, 'b': 2, 'c': 3, 'd': 4, '_cls': 'ConcreteConcreteGrandChild'}
+
+        # Cannot use abstract embedded document in EmbeddedField
+        with pytest.raises(exceptions.DocumentDefinitionError) as exc:
+            @self.instance.register
+            class MyDoc(Document):
+                impossibru = fields.EmbeddedField(AbstractParent)
+        assert exc.value.args[0] == "EmbeddedField doesn't accept abstract embedded document"
+        with pytest.raises(exceptions.DocumentDefinitionError) as exc:
+            @self.instance.register
+            class MyDoc(Document):
+                impossibru = fields.EmbeddedField(AbstractChild)
+        assert exc.value.args[0] == "EmbeddedField doesn't accept abstract embedded document"
+
 
     def test_bad_inheritance(self):
         with pytest.raises(exceptions.DocumentDefinitionError) as exc:

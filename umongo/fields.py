@@ -6,7 +6,7 @@ from marshmallow import fields as ma_fields
 from bson import DBRef, ObjectId
 
 # from .registerer import retrieve_document
-from .exceptions import NotRegisteredDocumentError
+from .exceptions import NotRegisteredDocumentError, DocumentDefinitionError
 from .template import get_template
 from .data_objects import Reference, List, Dict
 from . import marshmallow_bonus as ma_bonus_fields
@@ -403,6 +403,9 @@ class EmbeddedField(BaseField, ma_fields.Nested):
         if not self._embedded_document_cls:
             self._embedded_document_cls = self.instance.retrieve_embedded_document(
                 self.embedded_document)
+            if self._embedded_document_cls.opts.abstract:
+                raise DocumentDefinitionError(
+                    "EmbeddedField doesn't accept abstract embedded document")
         return self._embedded_document_cls
 
     def _serialize(self, value, attr, obj):
